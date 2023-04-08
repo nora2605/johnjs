@@ -2,9 +2,6 @@
 /// Arguments [
 ///     johntext "supplies a JOHN formatted text"
 /// ]
-//// fix: newlines in strings will be interpreted as spaces (should not be allowed)
-//// fix: the space char ' ' gets mistokenized.
-//// fix: doesn't recognize multiple spaces in strings (bad)
 export function parse(johntext) {
     if (typeof (johntext) !== typeof ("string")) {
         throw new Error("Argument supplied to 'parse' function must be a string");
@@ -18,18 +15,15 @@ export function parse(johntext) {
 }
 
 function tokenize(johntext) {
-    // preprocess
     let input = johntext.trim().replace(/\r/g, '');
-
     let str = false;
     let chr = false;
     let tokens = [];
     let currentToken = "";
-    let line = 1; // for error handling
+    let line = 1;
 
     for (let i = 0; i < input.length; i++) {
         switch (input.charAt(i)) {
-            // handles literal tokenization
             case '"':
                 if (!chr) {
                     if (str) {
@@ -49,7 +43,9 @@ function tokenize(johntext) {
                 if (!str) {
                     if (chr) {
                         currentToken += input.charAt(i);
-                        if (currentToken.length > 3) throw new JOHNError(`Tokenizer error: Line ${line}: Char cannot contain more than 1 character. Consider using a string literal instead.`);
+                        if (currentToken.length > 3) {
+                            throw new JOHNError(`Tokenizer error: Line ${line}: Char cannot contain more than 1 character. Consider using a string literal instead.`);
+                        }
                         tokens.push(currentToken);
                         currentToken = "";
                         chr = false;
@@ -57,43 +53,41 @@ function tokenize(johntext) {
                         currentToken += input.charAt(i);
                         chr = true;
                     }
-                }
-                else {
+                } else {
                     currentToken += input.charAt(i);
                 }
                 break;
-            // Breaks a token, if not in a string or char
             case ':':
             case ',':
             case ';':
             case ' ':
                 if (!str && !chr) {
-                    if (currentToken !== "") tokens.push(currentToken);
+                    if (currentToken)
+                        tokens.push(currentToken);
                     currentToken = "";
                 } else {
                     currentToken += input.charAt(i);
                 }
                 break;
-            // Breaks a token, breaks strings and chars
             case '\n':
                 if (str || chr) throw new JOHNError(`Tokenizer error: Line ${line}: Literal may not contain a newline. To include a newline use \\n instead.`);
-                if (currentToken !== "") tokens.push(currentToken);
+                if (currentToken)
+                    tokens.push(currentToken);
                 currentToken = "";
                 line++;
                 break;
-            // Prevents tokenization of next character (including itself)
             case '\\':
                 currentToken += input.charAt(i) + input.charAt(i + 1);
                 i++;
                 break;
-            // gets own token
             case '{':
             case '[':
             case '(':
             case ')':
             case ']':
             case '}':
-                if (currentToken !== "") tokens.push(currentToken);
+                if (currentToken)
+                    tokens.push(currentToken);
                 tokens.push(input.charAt(i));
                 currentToken = "";
                 break;
@@ -103,12 +97,13 @@ function tokenize(johntext) {
         }
     }
 
+    if (currentToken) tokens.push(currentToken);
+
     if (str || chr) {
-        throw new JOHNError('Tokenizer Error: Unmatched literal at line ' +
-            (1 + input.split('')
-                .filter((c, i) => c === '\n' && i <= input.lastIndexOf(str ? '"' : '\''))
-            )
-        );
+        const unmatchedQuoteLine = 1 + input.split('')
+            .filter((c, i) => c === '\n' && i <= input.lastIndexOf(str ? '"' : '\''))
+            .length;
+        throw new JOHNError(`Tokenizer Error: Unmatched quote at line ${unmatchedQuoteLine}`);
     }
 
     return tokens;
@@ -144,26 +139,6 @@ const token_types = {
 
 class JOHNError extends Error {
 
-}
-
-export function tokenize_strings(tokens) {
-    let new_tokens = [];
-    for (let i = 0; i < tokens.length; i++) {
-        if (tokens[i].startsWith('"')) {
-            let ni = tokens.findIndex((t, ii) => ii >= i && t.endsWith('"') && !t.endsWith('\\"'));
-            if (ni < 0) {
-                throw new Error(`Tokenizer terminated: String literal in ${tokens[i]} has no counterpart`);
-                return [];
-            }
-            let new_token = tokens.slice(i, ni + 1).join(' ');
-            console.log('Concatted string ' + new_token);
-            new_tokens.push(new_token);
-            i = ni;
-            continue;
-        }
-        new_tokens.push(tokens[i]);
-    }
-    return new_tokens;
 }
 
 function token_type(token) {
