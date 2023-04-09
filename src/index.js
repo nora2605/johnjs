@@ -1,3 +1,11 @@
+// TODO: linked lists
+// 0x00 and 0b00 notation
+// booleans
+// null
+// Line numbers in parser errors
+// serializer
+
+
 /// Name "Parse function for JOHN"
 /// Arguments [
 ///     johntext "supplies a JOHN formatted text"
@@ -112,24 +120,24 @@ function parse_array(tokens) {
             case token_types.link:
                 throw new JOHNError(`Parser error: Unexpected link symbol in array`);
             case token_types.object:
-                arr.push(parse_object(tokens[i++][0]));
+                arr.push(parse_object(tokens[i][0]));
                 break;
             case token_types.left_curly_brace:
                 closing_index = find_matching_bracket(tokens, i);
                 arr.push(parse_tokens(tokens.slice(i + 1, closing_index)));
-                i = closing_index + 1;
+                i = closing_index;
                 break;
             case token_types.left_square_brace:
                 closing_index = find_matching_bracket(tokens, i);
                 arr.push(parse_array(tokens.slice(i + 1, closing_index)));
-                i = closing_index + 1;
+                i = closing_index;
                 break;
             case token_types.left_paranthesis:
                 // tuple
                 closing_index = find_matching_bracket(tokens, i);
                 // Parse the tuple (as array)
                 arr.push(parse_array(tokens.slice(i + 1, closing_index)));
-                i = closing_index + 1;
+                i = closing_index;
                 break;
         }
     }
@@ -145,7 +153,7 @@ function parse_object(token) {
     let dmatches = (/^-?(?:(?:\d+)|(?:\d*\.\d+))([ui](?:8|16|32|64)|f(?:32|64))?$/).exec(token);
     if (dmatches) {
         // In JS number types don't matter
-        if (dmatches.length > 1) {
+        if (dmatches.groups) {
             token = token.substring(0, token.length - dmatches[1].length)
         }
         if (token.includes('.'))

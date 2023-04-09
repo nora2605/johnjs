@@ -33,6 +33,8 @@ best_friend {
 
 ## JOHNjs
 
+**Warning: This project is not finished. Some parts might not work.**
+
 johnjs is the library that connects john to js:
 
 ### Parsing
