@@ -7,11 +7,173 @@ export function parse(johntext) {
         throw new Error("Argument supplied to 'parse' function must be a string");
     }
 
-    let john_object = {};
-
-    let tokens = tokenize(johntext);
-
+    let tokens = tokenize(johntext).map(t => [t, token_type(t)]);
     console.log(tokens);
+
+    return parse_tokens(tokens);
+}
+
+function parse_tokens(tokens) {
+    // No tokens :(
+    if (!tokens || !tokens[0]) return {};
+    
+    let john_object = {};
+    let closing_index = -1;
+
+    // Single object parsing
+    if (tokens[0][1] === token_types.object && tokens.length === 1) {
+        return parse_object(tokens[0][0]);
+    }
+    // First token must be an identifier:
+    if (tokens[0][1] !== token_types.identifier) {
+        throw new JOHNError(`Parser Error: Expected an identifier, instead found ${tokens[0][1]} at "${tokens[0][0]}"`);
+        // TODO: get line number
+    }
+
+    let i = 0;
+    while (i < tokens.length) {
+        let identifier = tokens[i++][0];
+        switch(tokens[i][1]) {
+            case token_types.identifier:
+                throw new JOHNError(`Parser error: Invalid object content: "${tokens[i][0]}"`);
+            case token_types.right_curly_brace:
+            case token_types.right_paranthesis:
+            case token_types.right_square_brace:
+                // This just shouldn't happen tbh
+                throw new JOHNError(`Parser error: Unopened "${tokens[i][0]}" found`);
+            case token_types.link:
+                // circular linked list
+                break;
+            case token_types.object:
+                john_object[identifier] = parse_object(tokens[i++][0]);
+                break;
+            case token_types.left_curly_brace:
+                // nested object
+                closing_index = find_matching_bracket(tokens, i);
+                // Recursively parse nested objects
+                john_object[identifier] = parse_tokens(tokens.slice(i + 1, closing_index));
+                // Next index is index after the closing curly brace
+                i = closing_index + 1;
+                break;
+            case token_types.left_square_brace:
+                // array
+                closing_index = find_matching_bracket(tokens, i);
+                // Parse the array
+                john_object[identifier] = parse_array(tokens.slice(i + 1, closing_index));
+                // Next index is index after the closing curly brace
+                i = closing_index + 1;
+                break;
+            case token_types.left_paranthesis:
+                // tuple
+                closing_index = find_matching_bracket(tokens, i);
+                // Parse the tuple (as array)
+                john_object[identifier] = parse_array(tokens.slice(i + 1, closing_index));
+                i = closing_index + 1;
+                break;
+        }
+    }
+    return john_object;
+}
+
+function find_matching_bracket(tokens, index) {
+    let leftb = tokens[index][1];
+    let rightb =
+        leftb === token_types.left_curly_brace ? 
+            token_types.right_curly_brace :
+            leftb === token_types.left_square_brace ? 
+                token_types.right_square_brace : 
+                token_types.right_paranthesis;
+    let nesting_level = 0;
+    for (let i = index; i < tokens.length; i++) {
+        if (tokens[i][1] === leftb) nesting_level++;
+        if (tokens[i][1] === rightb) {
+            nesting_level--;
+            if (nesting_level === 0) {
+                return i;
+            }
+        }
+    }
+    throw new JOHNError(`Parser error: No matching bracket found for token ${index}`);
+}
+
+// Same method as for tuple parsing, because javascript does not have tuples
+// (or type safety for that matter)
+function parse_array(tokens) {
+    let arr = [];
+    for (let i = 0; i < tokens.length; i++) {
+        if (tokens[i][1] === token_types.identifier) {
+            throw new JOHNError("Parser error: Identifiers can't be inside an array: " + tokens[i][0]);
+        }
+        switch(tokens[i][1]) {
+            case token_types.right_curly_brace:
+            case token_types.right_paranthesis:
+            case token_types.right_square_brace: // <- THIS SHOULD NEVER BE THE CASE EVER HOW THE FUCK
+                throw new JOHNError(`Parser error: Unopened "${tokens[i][0]}" found`);
+            case token_types.link:
+                throw new JOHNError(`Parser error: Unexpected link symbol in array`);
+            case token_types.object:
+                arr.push(parse_object(tokens[i++][0]));
+                break;
+            case token_types.left_curly_brace:
+                closing_index = find_matching_bracket(tokens, i);
+                arr.push(parse_tokens(tokens.slice(i + 1, closing_index)));
+                i = closing_index + 1;
+                break;
+            case token_types.left_square_brace:
+                closing_index = find_matching_bracket(tokens, i);
+                arr.push(parse_array(tokens.slice(i + 1, closing_index)));
+                i = closing_index + 1;
+                break;
+            case token_types.left_paranthesis:
+                // tuple
+                closing_index = find_matching_bracket(tokens, i);
+                // Parse the tuple (as array)
+                arr.push(parse_array(tokens.slice(i + 1, closing_index)));
+                i = closing_index + 1;
+                break;
+        }
+    }
+    return arr;
+}
+
+function parse_object(token) {
+    // string/char
+    if ((/^[\"\'].*[\"\']$/).test(token)) {
+        return eval(token); // too lazy to replace \n and such by hand
+    }
+    // any number type
+    let dmatches = (/^-?(?:(?:\d+)|(?:\d*\.\d+))([ui](?:8|16|32|64)|f(?:32|64))?$/).exec(token);
+    if (dmatches) {
+        // In JS number types don't matter
+        if (dmatches.length > 1) {
+            token = token.substring(0, token.length - dmatches[1].length)
+        }
+        if (token.includes('.'))
+            return Number.parseFloat(token);
+        return Number.parseInt(token);
+    }
+    // version
+    if ((/^v(?:\d+\.){2,3}\d+$/).test(token)) {
+        let version_elements = token.substring(1).split('.');
+        return {
+            major: Number.parseInt(version_elements[0]),
+            minor: Number.parseInt(version_elements[1]),
+            patch: Number.parseInt(version_elements[2]),
+            build: version_elements.length > 3 ? Number.parseInt(version_elements[2]) : undefined // if index out of range just remains undefined
+        };
+    }
+    // index
+    if ((/^([\*\^])\d+/).test(token)) {
+        return Number.parseInt(token.replace('*', '').replace('^','-')); // yeah...
+    }
+    // range
+    if ((/^\d+..\d+(?:..\d+)?$/).test(token)) {
+        let range_elements = token.split('..').map(x => Number.parseInt(x));
+        let range = [];
+        for (let i = range_elements[0]; i < range_elements[1]; i += range_elements[2] ?? 1)
+            range.push(i);
+        return range;
+    }
 }
 
 function tokenize(johntext) {
@@ -109,10 +271,7 @@ function tokenize(johntext) {
     return tokens;
 }
 
-const object_type = {
-    object: 'object', // contains keyed elements of various types
-    array: 'array', // contains indexed elements of a strict type
-    tuple: 'tuple', // contains indexed elements of various types
+const primitive_type = {
     string: 'string', // contains a sequence of characters
     char: 'char', // contains a single character
     byte: 'byte', // contains an 8-bit integer
@@ -126,15 +285,30 @@ const object_type = {
     float: 'float', // contains a 32-bit floating point number
     double: 'double', // contains a 64-bit floating point number
     version: 'version', // contains a semantic version
-    range: 'range', // contains a range that gets compiled at read-time (array)
-    index: 'index', // contains an index (from left or right)
-    linked_list: 'linked_list', // contains a linked list
-    circular_linked_list: 'circular_linked_list', // contains a circularly linked list
+    range: 'range', // contains a range that gets compiled at read-time (array) [1..3, 1..55..0.5]
+    index: 'index', // contains an index (from left or right) [*1, ^1]
     null: 'null' // contains undefined
 }
 
 const token_types = {
+    identifier: 'identifier',
+    object: 'object',
+    left_curly_brace: 'left_curly_brace',
+    right_curly_brace: 'right_curly_brace',
+    left_square_brace: 'left_square_brace',
+    right_square_brace: 'right_square_brace',
+    left_paranthesis: 'left_paranthesis',
+    right_paranthesis: 'right_paranthesis',
+    link: 'link'
+}
 
+const token_dict = {
+    "{": token_types.left_curly_brace,
+    "}": token_types.right_curly_brace,
+    "[": token_types.left_square_brace,
+    "]": token_types.right_square_brace,
+    "(": token_types.left_paranthesis,
+    ")": token_types.right_paranthesis
 }
 
 class JOHNError extends Error {
@@ -142,7 +316,22 @@ class JOHNError extends Error {
 }
 
 function token_type(token) {
+    if ("([{}])".split('').includes(token)) {
+        return token_dict[token];
+    }
+    else if (token === '->') {
+        return token_types.link;
+    }
+    else if (validate_identifier(token)) {
+        return token_types.identifier;
+    }
+    else {
+        return token_types.object;
+    }
+}
 
+function validate_identifier(token) {
+    return (/^[a-zA-Z\_]+[a-zA-Z0-9\-\_]*$/).test(token);
 }
 
 export function stringify(object) {
