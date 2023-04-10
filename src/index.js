@@ -1,5 +1,3 @@
-// TODO: linked lists
-// 0x00 and 0b00 notation
 exports.parse = (johntext) => {
     if (typeof (johntext) !== typeof ("string")) {
         throw new Error("Argument supplied to 'parse' function must be a string");
@@ -13,7 +11,7 @@ exports.parse = (johntext) => {
 function parse_tokens(tokens) {
     // No tokens :(
     if (!tokens || !tokens[0]) return {};
-    
+
     let john_object = {};
     let closing_index = -1;
 
@@ -28,10 +26,11 @@ function parse_tokens(tokens) {
     }
 
     let i = 0;
+    let identifier = '';
     while (i < tokens.length) {
-        let identifier = tokens[i++][0];
         if (!tokens[i]) throw new JOHNError(`Parser error: Line ${tokens[i][2]}: Expected object content`);
-        switch(tokens[i][1]) {
+        identifier = tokens[i++][0];
+        switch (tokens[i][1]) {
             case token_types.identifier:
                 throw new JOHNError(`Parser error: Line ${tokens[i][2]}: Invalid object content: "${tokens[i][0]}"`);
             case token_types.right_curly_brace:
@@ -40,8 +39,53 @@ function parse_tokens(tokens) {
                 // This just shouldn't happen tbh
                 throw new JOHNError(`Parser error: Line ${tokens[i][2]}: Unopened "${tokens[i][0]}" found`);
             case token_types.link:
-                // circular linked list
-                break;
+                if (!identifier) throw new JOHNError(`Parser error: Line ${tokens[i][2]}: Unexpected link symbol`);
+                i++;
+                let llist = [];
+                while (tokens[i] && tokens[i][1] !== token_types.identifier && tokens[i][1] !== token_types.link) {
+                    switch (tokens[i][1]) {
+                        case token_types.object:
+                            llist.push(parse_object(tokens[i++][0]));
+                            break;
+                        case token_types.left_curly_brace:
+                            closing_index = find_matching_bracket(tokens, i);
+                            llist.push(parse_tokens(tokens.slice(i + 1, closing_index)));
+                            i = closing_index + 1;
+                            break;
+                        case token_types.left_square_brace:
+                            closing_index = find_matching_bracket(tokens, i);
+                            llist.push(parse_array(tokens.slice(i + 1, closing_index)));
+                            i = closing_index + 1;
+                            break;
+                        case token_types.left_paranthesis:
+                            closing_index = find_matching_bracket(tokens, i);
+                            llist.push(parse_array(tokens.slice(i + 1, closing_index)));
+                            i = closing_index + 1;
+                            break;
+                    }
+                }
+                if (!tokens[i] || tokens[i][1] === token_types.identifier) {
+                    let nodes = [];
+                    nodes.push({value: llist[0], next: null});
+                    for (let j = 1; j < llist.length; j++) {
+                        nodes.push({value: llist[j], next: null});
+                        nodes[j - 1].next = nodes[j];
+                    }
+                    john_object[identifier] = nodes[0];
+                    break;
+                }
+                else {
+                    let nodes = [];
+                    nodes.push({value: llist[0], next: null});
+                    for (let j = 1; j < llist.length; j++) {
+                        nodes.push({value: llist[j], next: null});
+                        nodes[j - 1].next = nodes[j];
+                    }
+                    nodes[llist.length - 1].next = nodes[0];
+                    john_object[identifier] = nodes[0];
+                    i++;
+                    break;
+                }
             case token_types.object:
                 john_object[identifier] = parse_object(tokens[i++][0]);
                 break;
@@ -76,10 +120,10 @@ function parse_tokens(tokens) {
 function find_matching_bracket(tokens, index) {
     let leftb = tokens[index][1];
     let rightb =
-        leftb === token_types.left_curly_brace ? 
+        leftb === token_types.left_curly_brace ?
             token_types.right_curly_brace :
-            leftb === token_types.left_square_brace ? 
-                token_types.right_square_brace : 
+            leftb === token_types.left_square_brace ?
+                token_types.right_square_brace :
                 token_types.right_paranthesis;
     let nesting_level = 0;
     for (let i = index; i < tokens.length; i++) {
@@ -103,7 +147,7 @@ function parse_array(tokens) {
         if (tokens[i][1] === token_types.identifier) {
             throw new JOHNError(`Parser error: Line ${tokens[i][2]}: Identifiers can't be inside an array`);
         }
-        switch(tokens[i][1]) {
+        switch (tokens[i][1]) {
             case token_types.right_curly_brace:
             case token_types.right_paranthesis:
             case token_types.right_square_brace: // <- THIS SHOULD NEVER BE THE CASE EVER HOW THE FUCK
@@ -158,6 +202,15 @@ function parse_object(token) {
             return Number.parseFloat(token);
         return Number.parseInt(token);
     }
+    if (token.startsWith('0')) {
+        if (token.charAt(2) === 'b') {
+            return Number.parseInt(token.substring(2), 2);
+        } else if (token.charAt(2) === 'x') {
+            return Number.parseInt(token.substring(2), 16);
+        } else {
+            throw new JOHNError(`Unknown number base: ${token}`);
+        }
+    }
     // version
     if ((/^v(?:\d+\.){2,3}\d+$/).test(token)) {
         let version_elements = token.substring(1).split('.');
@@ -170,18 +223,18 @@ function parse_object(token) {
     }
     // index
     if ((/^([\*\^])\d+/).test(token)) {
-        return Number.parseInt(token.replace('*', '').replace('^','-')); // yeah...
+        return Number.parseInt(token.replace('*', '').replace('^', '-')); // yeah...
     }
     // range
-    if ((/^\d+..\d+(?:..\d+)?$/).test(token)) {
-        let range_elements = token.split('..').map(x => Number.parseInt(x));
+    if ((/^\d+(?:\.\d+)?\.\.\d+(?:\.\d+)?(?:\.\.\d+(?:\.\d+)?)?$/).test(token)) {
+        let range_elements = token.split('..').map(x => Number.parseFloat(x));
         let range = [];
         for (let i = range_elements[0]; i < range_elements[1]; i += range_elements[2] ?? 1)
             range.push(i);
         return range;
     }
 
-    throw new JOHNError("This should not happen. If it does, open a github issue");
+    throw new JOHNError("Unrecognized object type: " + token);
 }
 
 function tokenize(johntext) {
@@ -266,9 +319,7 @@ function tokenize(johntext) {
                 break;
         }
     }
-
     if (currentToken) tokens.push([currentToken, line]);
-
     if (str || chr) {
         const unmatchedQuoteLine = 1 + input.split('')
             .filter((c, i) => c === '\n' && i <= input.lastIndexOf(str ? '"' : '\''))
@@ -277,25 +328,6 @@ function tokenize(johntext) {
     }
 
     return tokens;
-}
-
-const primitive_type = {
-    string: 'string', // contains a sequence of characters
-    char: 'char', // contains a single character
-    byte: 'byte', // contains an 8-bit integer
-    sbyte: 'sbyte', // contains an 8-bit signed integer
-    short: 'short', // contains a signed 16-bit integer
-    ushort: 'ushort', // contains an unsigned 16-bit integer
-    int: 'int', // contains a signed 32-bit integer
-    uint: 'uint', // contains an unsigned 32-bit integer
-    long: 'long', // contains a signed 64-bit integer
-    ulong: 'ulong', // contains an unsigned 64-bit integer
-    float: 'float', // contains a 32-bit floating point number
-    double: 'double', // contains a 64-bit floating point number
-    version: 'version', // contains a semantic version
-    range: 'range', // contains a range that gets compiled at read-time (array) [1..3, 1..55..0.5]
-    index: 'index', // contains an index (from left or right) [*1, ^1]
-    null: 'null' // contains undefined
 }
 
 const token_types = {
@@ -347,7 +379,7 @@ exports.serialize = (object) => {
     if (Array.isArray(object)) {
         return "[" + serialize_array(object) + "]";
     }
-    if (typeof(object) !== 'object') {
+    if (typeof (object) !== 'object') {
         return stringify_prim(object);
     }
     let keys = Object.keys(object);
@@ -355,7 +387,7 @@ exports.serialize = (object) => {
         johntext += " " + key + " ";
         if (Array.isArray(object[key]))
             johntext += " [ " + serialize_array(object[key]) + " ] ";
-        else if (typeof(object[key]) === 'object' && object[key] !== null)
+        else if (typeof (object[key]) === 'object' && object[key] !== null)
             johntext += " { " + serialize(object[key]) + " } ";
         else if (object[key] !== null)
             johntext += stringify_prim(object[key]);
@@ -374,7 +406,7 @@ function serialize_array(arr) {
     for (let i = 0; i < arr.length; i++) {
         if (Array.isArray(arr[i]))
             ser += " [ " + serialize_array(arr[i]) + " ] ";
-        else if (typeof(arr[i]) === 'object' && arr[i] !== null)
+        else if (typeof (arr[i]) === 'object' && arr[i] !== null)
             ser += " { " + serialize(arr[i]) + " } ";
         else if (arr[i] !== null)
             ser += stringify_prim(arr[i]);
@@ -386,13 +418,13 @@ function serialize_array(arr) {
 }
 
 function stringify_prim(object) {
-    if (typeof(object) === typeof("string")) {
+    if (typeof (object) === "string") {
         return `"${object}"`;
     }
-    if (typeof(object) === typeof(1)) {
+    if (typeof (object) === "number") {
         return `${object}`;
     }
-    if (typeof(object) === typeof(true)) {
+    if (typeof (object) === "boolean") {
         return `${object}`;
     }
     if (!object) {
