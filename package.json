@@ -1,6 +1,6 @@
 {
   "name": "johnjs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "JOHN parser and serializer for javascript",
   "main": "./src/index.js",
   "type": "module",
