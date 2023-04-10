@@ -42,9 +42,9 @@ johnjs is the library that connects john to js:
 You can parse a JOHN string like you would with JSON:
 
 ```js
-import JOHN from 'john'
+import JOHN from 'johnjs'
 // or
-const JOHN = require('john');
+const JOHN = require('johnjs');
 
 JOHN.parse('hello "hi"');
 // >>> { hello: "hi" }
