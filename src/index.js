@@ -1,22 +1,11 @@
 // TODO: linked lists
 // 0x00 and 0b00 notation
-// booleans
-// null
-// Line numbers in parser errors
-// serializer
-
-
-/// Name "Parse function for JOHN"
-/// Arguments [
-///     johntext "supplies a JOHN formatted text"
-/// ]
 export function parse(johntext) {
     if (typeof (johntext) !== typeof ("string")) {
         throw new Error("Argument supplied to 'parse' function must be a string");
     }
 
-    let tokens = tokenize(johntext).map(t => [t, token_type(t)]);
-    console.log(tokens);
+    let tokens = tokenize(johntext).map(t => [t[0], token_type(t[0]), t[1]]);
 
     return parse_tokens(tokens);
 }
@@ -34,21 +23,22 @@ function parse_tokens(tokens) {
     }
     // First token must be an identifier:
     if (tokens[0][1] !== token_types.identifier) {
-        throw new JOHNError(`Parser Error: Expected an identifier, instead found ${tokens[0][1]} at "${tokens[0][0]}"`);
+        throw new JOHNError(`Parser Error: Line ${tokens[0][2]}: Expected an identifier, instead found ${tokens[0][1]}`);
         // TODO: get line number
     }
 
     let i = 0;
     while (i < tokens.length) {
         let identifier = tokens[i++][0];
+        if (!tokens[i]) throw new JOHNError(`Parser error: Line ${tokens[i][2]}: Expected object content`);
         switch(tokens[i][1]) {
             case token_types.identifier:
-                throw new JOHNError(`Parser error: Invalid object content: "${tokens[i][0]}"`);
+                throw new JOHNError(`Parser error: Line ${tokens[i][2]}: Invalid object content: "${tokens[i][0]}"`);
             case token_types.right_curly_brace:
             case token_types.right_paranthesis:
             case token_types.right_square_brace:
                 // This just shouldn't happen tbh
-                throw new JOHNError(`Parser error: Unopened "${tokens[i][0]}" found`);
+                throw new JOHNError(`Parser error: Line ${tokens[i][2]}: Unopened "${tokens[i][0]}" found`);
             case token_types.link:
                 // circular linked list
                 break;
@@ -101,24 +91,25 @@ function find_matching_bracket(tokens, index) {
             }
         }
     }
-    throw new JOHNError(`Parser error: No matching bracket found for token ${index}`);
+    throw new JOHNError(`Parser error: Line ${tokens[index][2]}: No matching bracket found for token ${index}`);
 }
 
 // Same method as for tuple parsing, because javascript does not have tuples
 // (or type safety for that matter)
 function parse_array(tokens) {
     let arr = [];
+    let closing_index = -1;
     for (let i = 0; i < tokens.length; i++) {
         if (tokens[i][1] === token_types.identifier) {
-            throw new JOHNError("Parser error: Identifiers can't be inside an array: " + tokens[i][0]);
+            throw new JOHNError(`Parser error: Line ${tokens[i][2]}: Identifiers can't be inside an array`);
         }
         switch(tokens[i][1]) {
             case token_types.right_curly_brace:
             case token_types.right_paranthesis:
             case token_types.right_square_brace: // <- THIS SHOULD NEVER BE THE CASE EVER HOW THE FUCK
-                throw new JOHNError(`Parser error: Unopened "${tokens[i][0]}" found`);
+                throw new JOHNError(`Parser error: How the hell did you even do that`);
             case token_types.link:
-                throw new JOHNError(`Parser error: Unexpected link symbol in array`);
+                throw new JOHNError(`Parser error: Line ${tokens[i][2]}: Unexpected link symbol in array`);
             case token_types.object:
                 arr.push(parse_object(tokens[i][0]));
                 break;
@@ -145,9 +136,16 @@ function parse_array(tokens) {
 }
 
 function parse_object(token) {
+    if (token === "#") {
+        return null;
+    }
     // string/char
     if ((/^[\"\'].*[\"\']$/).test(token)) {
         return eval(token); // too lazy to replace \n and such by hand
+    }
+    // boolean
+    if (token === "true" || token === "false") {
+        return token === "true";
     }
     // any number type
     let dmatches = (/^-?(?:(?:\d+)|(?:\d*\.\d+))([ui](?:8|16|32|64)|f(?:32|64))?$/).exec(token);
@@ -182,6 +180,8 @@ function parse_object(token) {
             range.push(i);
         return range;
     }
+
+    throw new JOHNError("This should not happen. If it does, open a github issue");
 }
 
 function tokenize(johntext) {
@@ -198,7 +198,7 @@ function tokenize(johntext) {
                 if (!chr) {
                     if (str) {
                         currentToken += input.charAt(i);
-                        tokens.push(currentToken);
+                        tokens.push([currentToken, line]);
                         currentToken = "";
                         str = false;
                     } else {
@@ -216,7 +216,7 @@ function tokenize(johntext) {
                         if (currentToken.length > 3) {
                             throw new JOHNError(`Tokenizer error: Line ${line}: Char cannot contain more than 1 character. Consider using a string literal instead.`);
                         }
-                        tokens.push(currentToken);
+                        tokens.push([currentToken, line]);
                         currentToken = "";
                         chr = false;
                     } else {
@@ -233,7 +233,7 @@ function tokenize(johntext) {
             case ' ':
                 if (!str && !chr) {
                     if (currentToken)
-                        tokens.push(currentToken);
+                        tokens.push([currentToken, line]);
                     currentToken = "";
                 } else {
                     currentToken += input.charAt(i);
@@ -242,7 +242,7 @@ function tokenize(johntext) {
             case '\n':
                 if (str || chr) throw new JOHNError(`Tokenizer error: Line ${line}: Literal may not contain a newline. To include a newline use \\n instead.`);
                 if (currentToken)
-                    tokens.push(currentToken);
+                    tokens.push([currentToken, line]);
                 currentToken = "";
                 line++;
                 break;
@@ -257,8 +257,8 @@ function tokenize(johntext) {
             case ']':
             case '}':
                 if (currentToken)
-                    tokens.push(currentToken);
-                tokens.push(input.charAt(i));
+                    tokens.push([currentToken, line]);
+                tokens.push([input.charAt(i), line]);
                 currentToken = "";
                 break;
             default:
@@ -267,7 +267,7 @@ function tokenize(johntext) {
         }
     }
 
-    if (currentToken) tokens.push(currentToken);
+    if (currentToken) tokens.push([currentToken, line]);
 
     if (str || chr) {
         const unmatchedQuoteLine = 1 + input.split('')
@@ -339,9 +339,69 @@ function token_type(token) {
 }
 
 function validate_identifier(token) {
-    return (/^[a-zA-Z\_]+[a-zA-Z0-9\-\_]*$/).test(token);
+    return (/^[a-zA-Z\_]+[a-zA-Z0-9\-\_]*$/).test(token) && !["true", "false", "#"].includes(token);
 }
 
-export function stringify(object) {
+export function serialize(object) {
+    let johntext = "";
+    if (Array.isArray(object)) {
+        return "[" + serialize_array(object) + "]";
+    }
+    if (typeof(object) !== 'object') {
+        return stringify_prim(object);
+    }
+    let keys = Object.keys(object);
+    keys.forEach(key => {
+        johntext += " " + key + " ";
+        if (Array.isArray(object[key]))
+            johntext += " [ " + serialize_array(object[key]) + " ] ";
+        else if (typeof(object[key]) === 'object' && object[key] !== null)
+            johntext += " { " + serialize(object[key]) + " } ";
+        else if (object[key] !== null)
+            johntext += stringify_prim(object[key]);
+        else
+            johntext += " # ";
+    });
+    return johntext.replace(/\s+/g, ' ').trim();
+}
 
+export function minify(johntext) {
+    return tokenize(johntext).map(t => t[0]).join(' ').replace(/\s*[\[\{\(\]\}\)]\s*/g, s => s.replace(/\s+/g, ''));
+}
+
+function serialize_array(arr) {
+    let ser = "";
+    for (let i = 0; i < arr.length; i++) {
+        if (Array.isArray(arr[i]))
+            ser += " [ " + serialize_array(arr[i]) + " ] ";
+        else if (typeof(arr[i]) === 'object' && arr[i] !== null)
+            ser += " { " + serialize(arr[i]) + " } ";
+        else if (arr[i] !== null)
+            ser += stringify_prim(arr[i]);
+        else
+            ser += " # ";
+        ser += " ";
+    }
+    return ser;
+}
+
+function stringify_prim(object) {
+    if (typeof(object) === typeof("string")) {
+        return `"${object}"`;
+    }
+    if (typeof(object) === typeof(1)) {
+        return `${object}`;
+    }
+    if (typeof(object) === typeof(true)) {
+        return `${object}`;
+    }
+    if (!object) {
+        return `#`;
+    }
+    try {
+        return object.toString();
+    }
+    catch {
+        throw new JOHNError(`Unable to stringify ${object}`);
+    }
 }
