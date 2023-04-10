@@ -1,6 +1,6 @@
 // TODO: linked lists
 // 0x00 and 0b00 notation
-export function parse(johntext) {
+exports.parse = (johntext) => {
     if (typeof (johntext) !== typeof ("string")) {
         throw new Error("Argument supplied to 'parse' function must be a string");
     }
@@ -342,7 +342,7 @@ function validate_identifier(token) {
     return (/^[a-zA-Z\_]+[a-zA-Z0-9\-\_]*$/).test(token) && !["true", "false", "#"].includes(token);
 }
 
-export function serialize(object) {
+exports.serialize = (object) => {
     let johntext = "";
     if (Array.isArray(object)) {
         return "[" + serialize_array(object) + "]";
@@ -365,7 +365,7 @@ export function serialize(object) {
     return johntext.replace(/\s+/g, ' ').trim();
 }
 
-export function minify(johntext) {
+exports.minify = (johntext) => {
     return tokenize(johntext).map(t => t[0]).join(' ').replace(/\s*[\[\{\(\]\}\)]\s*/g, s => s.replace(/\s+/g, ''));
 }
 
