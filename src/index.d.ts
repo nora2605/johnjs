@@ -1,1 +1,1 @@
-export { parse, minify, serialize } from './index.js';
+export { minify, parse, serialize } from "./index.js";
