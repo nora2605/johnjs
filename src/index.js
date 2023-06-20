@@ -1,5 +1,3 @@
-// TODO: Add line comments
-
 exports.parse = (johntext) => {
   if (typeof (johntext) !== typeof ("string")) {
     throw new Error("Argument supplied to 'parse' function must be a string");
@@ -357,7 +355,7 @@ function tokenize(johntext) {
         line++;
         break;
       case "\\":
-        currentToken += input.charAt(i) + input.charAt(i + 1);
+        currentToken += input.charAt(i + 1);
         i++;
         break;
       case "{":
@@ -366,11 +364,30 @@ function tokenize(johntext) {
       case ")":
       case "]":
       case "}":
-        if (currentToken) {
-          tokens.push([currentToken, line]);
+        if (str || chr) currentToken += input.charAt(i);
+        else {
+          if (currentToken) {
+            tokens.push([currentToken, line]);
+          }
+          tokens.push([input.charAt(i), line]);
+          currentToken = "";
         }
-        tokens.push([input.charAt(i), line]);
-        currentToken = "";
+        break;
+      case "/":
+        if (str || chr) currentToken += input.charAt(i);
+        else {
+          if (input.charAt(i + 1) ?? "" === "/") {
+            if (currentToken) {
+              tokens.push([currentToken, line]);
+            }
+            currentToken = "";
+            i = input.indexOf("\n", i);
+            if (i < 0) i = input.length - 1;
+            line++;
+          } else {
+            currentToken += input.charAt(i);
+          }
+        }
         break;
       default:
         currentToken += input.charAt(i);
