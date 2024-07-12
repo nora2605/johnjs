@@ -4,7 +4,7 @@
 
 John is a data serialization notation and the default for the Jane language.
 
-The full documentation can be found in the Jane documentation at [The Jane repo](https://github.com/nora2605/jane)
+The full specification can be found in the Jane documentation at [The Jane repo](https://github.com/nora2605/jane)
 
 Here's an example of how to use JOHN:
 
@@ -33,7 +33,7 @@ best_friend {
 
 ## JOHNjs
 
-**Warning: This project is not finished. Some parts might not work.**
+**Warning: The formatter is not currently in a production-ready state.**
 
 johnjs is the library that connects john to js:
 
@@ -50,11 +50,22 @@ JOHN.parse('hello "hi"');
 // >>> { hello: "hi" }
 ```
 
-And stringify it by using the `serialize` function:
+And stringify it by using the `stringify` function:
 
 ```js
-JOHN.serialize({hello: "hi", wow: ['Very cool']});
+JOHN.stringify({hello: "hi", wow: ['Very cool']});
 // >>> hello "hi" wow [ "Very cool" ]
 ```
 
-Formatting might or might not be available in the future.
+You can also format JOHN using the `format` function (this might not work!):
+
+```js
+JOHN.format(`key "value" obj { key2 "value2" key3 "value3" }`);
+// >>> key: "value",
+// >>> obj {
+// >>>     key2: "value2",
+// >>>     key3: "value3",
+// >>> }
+```
+
+JOHNjs includes typescript definitions for ease of use.
