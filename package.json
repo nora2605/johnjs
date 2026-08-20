@@ -1,6 +1,6 @@
 {
   "name": "johnjs",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "description": "JOHN parser and serializer for javascript",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",

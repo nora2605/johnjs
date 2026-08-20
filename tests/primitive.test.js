@@ -24,6 +24,7 @@ test('string parses correctly', () => {
     expect(parse(`"a\\nbc"`)).toBe('a\nbc');
     expect(parse(`"a\\u0062c"`)).toBe('abc');
     expect(parse(`"a\\U0001f600c"`)).toBe('a\u{1F600}c');
+    expect(parse(`"that's cool"`)).toBe('that\'s cool');
 });
 
 test('char parses correctly', () => {
